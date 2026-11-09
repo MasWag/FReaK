@@ -45,19 +45,30 @@ function varargout = randFalsify(obj)
 %------------- BEGIN CODE --------------
 
 tic;
+obj.spec = reshape(obj.spec,[],1);
 soln.falsified=false;
+soln.falsifyMode=obj.falsifyMode;
 soln.best.rob=inf;
+soln.best.spec=[];
 soln.sims=0;
+soln.totalSpecs=numel(obj.spec);
+soln.numSpecsFalsified=0;
+soln.remainingSpecs=obj.spec;
+soln.specResults = dictionary(obj.spec,struct);
+for ii=1:numel(obj.spec)
+    spec=obj.spec(ii);
+    specResult=struct; specResult.falsified=false; specResult.falsifiedAtSim=NaN;
+    specResult.best.rob=inf; specResult.best.x=NaN; specResult.best.u=NaN; specResult.best.t=NaN; specResult.best.spec=spec;
+    specResult.falsifyingTrace.rob=NaN; specResult.falsifyingTrace.x=NaN; specResult.falsifyingTrace.u=NaN; specResult.falsifyingTrace.t=NaN; specResult.falsifyingTrace.spec=spec;
+    soln.specResults(spec)=specResult;
+end
 if nargout > 1
     sims.t={}; sims.X={}; sims.XU={}; sims.ROB={};
 end
 for ii=1:obj.maxSims
     [t, x, u] = sampleSimulation(obj);
     soln.sims = soln.sims+1; 
-    [soln,falsified,robustness]=checkFalsification(soln,x,u,t,obj.spec,obj.inputInterpolation,'rand Simulation',obj.verb);
-    if robustness < soln.best.rob
-        soln.best.rob=robustness; soln.best.t=t; soln.best.x=x; soln.best.u=u;
-    end
+    [soln,falsified,robustness]=checkFalsification(soln,x,u,t,obj.spec,t,obj.inputInterpolation,obj.U,'rand Simulation',obj.verb);
     if nargout > 1
         sims.t{end+1}=t; sims.X{end+1}=x; sims.XU{end+1}=u; sims.ROB{end+1}=robustness;
     end
@@ -67,6 +78,7 @@ for ii=1:obj.maxSims
     end
 
 end
+soln.runtime=toc;
 if nargout > 0
     varargout{1} = soln;
 end
@@ -74,7 +86,6 @@ if nargout > 1
     varargout{2} = sims;
 end
 
-soln.runtime=toc;
 LogicalStr = {'No', 'Yes'};
 vprintf(obj.verb,1,'<-------------------------------------------------------> \n')
 vprintf(obj.verb,1,"Falsified: %s \n",LogicalStr{soln.falsified+1})

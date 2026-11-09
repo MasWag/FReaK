@@ -10,7 +10,8 @@ function [solns,allDatas] = falsify(obj,varargin)
 %    This function is the core of the falsification procedure, which iteratively
 %    searches for a falsifying trajectory by simulating the system, training
 %    the Koopman model, and optimizing for critical trajectories. The process
-%    continues until a falsifying trajectory is found or a specified timeout is reached.
+%    continues until a falsifying trajectory is found (or all specs are
+%    falsified if obj.falsifyMode='all') or a specified timeout is reached.
 %
 % Inputs:
 %    obj - KF object containing the Koopman model and various parameters
@@ -133,7 +134,9 @@ for run=1:obj.runs
         % determine most critical reachable set and specification
         %         try
         optimTime=tic;
-        specSolns = critAlpha(obj,R,koopModel,specSolns);
+        activeSpecs=getActiveSpecs(obj.spec,soln); %only optimize specs not yet falsified
+        critObj=obj; critObj.spec=activeSpecs;
+        specSolns = critAlpha(critObj,R,koopModel,specSolns);
         soln.optimTime=soln.optimTime+toc(optimTime);
         %         catch
         %             vprintf(obj.verb,2,"error encountered whilst setup/solving, resetting training data \n")
@@ -142,10 +145,7 @@ for run=1:obj.runs
         %         end
 
         %get critical spec with minimum robustness and corresponding soln struct
-        [~,minIndex]=min(specSolns.values.rob);
-        keys = specSolns.keys('cell');
-        critSpec=keys{minIndex};
-        curSoln=specSolns(critSpec);
+        [critSpec,curSoln]=getCriticalSpec(specSolns,activeSpecs);
 
         % this section check if critical trajectory is falsifying. If not, it also offsets if neccassary
         if curSoln.rob~=inf %found some solution
@@ -197,7 +197,7 @@ for run=1:obj.runs
                     % if spec is stl AND [robustness is greater than gap termination criteria for solver and an offset mode selected by user.
                     % OR if auto add  time points (find critical times)]
                     if strcmp(critSpec.type,'logic') && ((offsetIter==0 && robustness > getSolverGap(obj.solver.opts) && abs(obj.offsetStrat)) || obj.solver.autoAddTimePoints)
-                        [critPreds,critTimes,preds]=bReachCulprit(Bdata,critSpec.set,~obj.solver.autoAddConstraints); %get predicates responsible for robustness value
+                        [critPreds,critTimes,preds]=bReachCulprit(Bdata(critSpec).Bdata,critSpec.set,~obj.solver.autoAddConstraints); %get predicates responsible for robustness value
                         %add new critical time points if auto add is selected by user
                         if obj.solver.autoAddTimePoints
                             %transform critical time values to nearest autokoopman step
@@ -281,6 +281,26 @@ for run=1:obj.runs
 end
 %remove progress bar
 if obj.verb==0; fprintf(reverseStr); end
+end
+
+function activeSpecs = getActiveSpecs(specs,soln)
+%get specs to optimize for: specs not yet falsified in 'all' mode, otherwise all specs
+if strcmp(soln.falsifyMode,'all')
+    activeSpecs=soln.remainingSpecs;
+else
+    activeSpecs=specs;
+end
+end
+
+function [critSpec,curSoln] = getCriticalSpec(specSolns,activeSpecs)
+%get critical spec with minimum robustness and corresponding soln struct
+robValues=inf(numel(activeSpecs),1);
+for ii=1:numel(activeSpecs)
+    robValues(ii)=specSolns(activeSpecs(ii)).rob;
+end
+[~,minIndex]=min(robValues);
+critSpec=activeSpecs(minIndex);
+curSoln=specSolns(critSpec);
 end
 
 function repeatedTraj = checkTrainsetRepeatedTraj(critX0,critU,trainset,verb)

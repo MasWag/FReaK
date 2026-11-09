@@ -1,6 +1,11 @@
 function printInfo(solns)
 % soln: cells of kfModel.soln, see repArch22 for example
 
+if ~isempty(solns) && isfield(solns{1},'totalSpecs')
+    specsFalsified=getAllMetrics(solns,'numSpecsFalsified');
+    fprintf('Average number of falsified specs: %.2f/%d\n', mean(specsFalsified), solns{1}.totalSpecs);
+end
+
 avgFalsified=sum(getMetrics(solns,'falsified'));
 fprintf('Number of successful falsified traces: %d/%d\n', avgFalsified,numel(solns));
 
@@ -39,6 +44,13 @@ if avgFalsified>0
 
 end
 
+end
+
+function list = getAllMetrics(solns,metric)
+list=[];
+for i=1:length(solns)
+    list=[list,solns{i}.(metric)];
+end
 end
 
 function list = getMetrics(solns,metric)

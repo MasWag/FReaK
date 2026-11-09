@@ -64,6 +64,7 @@ assert(isa(obj.R0, 'interval'), 'Initial set (obj.R0) must be defined as a CORA 
 assert(isnumeric(obj.T) && isscalar(obj.T) && obj.T>0, 'Time horizon (obj.T) must be defined as a positive numeric')
 assert(isnumeric(obj.dt) && isscalar(obj.dt), 'Time step (obj.dt) must be defined as a numeric')
 assert(isa(obj.spec, 'specification'), 'Falsifying spec (obj.spec) must be defined as a CORA specification')
+obj.spec = reshape(obj.spec,[],1);
 
 for ii=1:numel(obj.spec)
     spec=obj.spec(ii);
@@ -99,6 +100,7 @@ assert(isnumeric(obj.timeout) && isscalar(obj.timeout) && obj.timeout > 0, 'Time
 assert((isnumeric(obj.nResets) && isscalar(obj.nResets) && obj.nResets > 0 && round(obj.nResets) == obj.nResets) || strcmp('auto',obj.nResets), 'Reset number (obj.maxSims) must be a positive, integer, scalar number OR a string (auto)');
 assert(isnumeric(obj.trainStrat) && isscalar(obj.trainStrat) && obj.trainStrat >= 0 && obj.trainStrat <= 2 && round(obj.trainStrat) == obj.trainStrat,'Training option (obj.trainStrat) must be an integer between 0 and 2')
 assert(islogical(obj.rmRand) || isnumeric(obj.rmRand) && isscalar(obj.rmRand) && ismember(obj.rmRand, [0, 1]), 'Remove random training trajectory (obj.rmRand) must be a boolean');
+assert(any(strcmp(obj.falsifyMode, {'any','all'})), 'Falsification mode (obj.falsifyMode) must be either ''any'' or ''all''')
 if obj.trainStrat==1 || obj.trainStrat==2
     if obj.rmRand
         obj.rmRand=false;
@@ -153,14 +155,26 @@ obj=setInputsInterval(obj);
 %struct to store soln
 soln=struct;
 soln.falsified=false;
+soln.falsifyMode=obj.falsifyMode;
 soln.koopTime=0; soln.reachTime=0;
 soln.optimTime=0; soln.simTime=0;
 soln.sims=0;
+soln.totalSpecs=numel(obj.spec);
+soln.numSpecsFalsified=0;
+soln.remainingSpecs=obj.spec;
 %struct for best soln found
 soln.best.rob=inf;
-soln.best.x=NaN; soln.best.u=NaN; soln.best.t=NaN;
+soln.best.x=NaN; soln.best.u=NaN; soln.best.t=NaN; soln.best.spec=[];
+soln.specResults = dictionary(obj.spec,struct);
 %reset dict to store prev soln for each spec
 specSolns = dictionary(obj.spec,struct);
+for ii=1:numel(obj.spec)
+    spec=obj.spec(ii);
+    specResult=struct; specResult.falsified=false; specResult.falsifiedAtSim=NaN;
+    specResult.best.rob=inf; specResult.best.x=NaN; specResult.best.u=NaN; specResult.best.t=NaN; specResult.best.spec=spec;
+    specResult.falsifyingTrace.rob=NaN; specResult.falsifyingTrace.x=NaN; specResult.falsifyingTrace.u=NaN; specResult.falsifyingTrace.t=NaN; specResult.falsifyingTrace.spec=spec;
+    soln.specResults(spec)=specResult;
+end
 %if we auto add constraints, store critical times
 if obj.solver.autoAddConstraints
     for ii=1:numel(obj.spec)

@@ -65,6 +65,10 @@ To test successful installation, run example script that falsifies a Vanderpol m
 falsifyVanderpol
 ```
 
+To falsify all specs in `kfModel.spec` (a column array of specifications)
+rather than stopping at the first falsified spec, set
+`kfModel.falsifyMode = 'all';` (see `examples/tests/falsifyAircraftODEAll.m`).
+The result for each spec is stored in `soln.specResults`, in the given order.
 
 
 ## Citing FReaK
